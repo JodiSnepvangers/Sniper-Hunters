@@ -1,0 +1,660 @@
+settings
+{
+	modes
+	{
+		Deathmatch
+		{
+			Game Length In Minutes: 15
+			Self Initiated Respawn: Off
+
+			disabled maps
+			{
+				Kanezaka
+				Workshop Expanse Night
+				Workshop Green Screen
+				Workshop Island Night
+			}
+		}
+
+		General
+		{
+			Allow Hero Switching: Off
+			Enemy Health Bars: Off
+			Game Mode Start: Immediately
+			Limit Roles: 2 Of Each Role Per Team
+			Respawn As Random Hero: On
+			Respawn Time Scalar: 50%
+			Spawn Health Packs: Disabled
+		}
+	}
+
+	heroes
+	{
+		General
+		{
+			Ana
+			{
+				Biotic Grenade: Off
+				No Automatic Fire: On
+				Quick Melee: Off
+				Ultimate Ability Nano Boost: Off
+			}
+
+			Ashe
+			{
+				Dynamite: Off
+				No Automatic Fire: On
+				Quick Melee: Off
+				Ultimate Ability B.O.B.: Off
+			}
+
+			Echo
+			{
+				Flight Cooldown Time: 50%
+				Focusing Beam: Off
+				Primary Fire: Off
+				Quick Melee: Off
+				Ultimate Generation - Combat Duplicate: 300%
+			}
+
+			Pharah
+			{
+				Concussive Blast Cooldown Time: 50%
+				Hover Jets Maximum Time: 150%
+				Jump Jet Cooldown Time: 50%
+				Primary Fire: Off
+				Quick Melee: Off
+				Ultimate Ability Barrage: Off
+			}
+
+			Widowmaker
+			{
+				No Automatic Fire: On
+				Quick Melee: Off
+				Ultimate Ability Infra-Sight: Off
+				Venom Mine: Off
+			}
+
+			enabled heroes
+			{
+				Ana
+				Ashe
+				Echo
+				Pharah
+				Widowmaker
+			}
+		}
+	}
+}
+
+variables
+{
+	global:
+		0: AvailableHunters
+		1: AvailableTargets
+		2: MaxTargetAmount
+		3: CurrentTargets
+		5: ImmortalityDuration
+		6: MaxHitPoints
+		7: HeadshotDamage
+		8: TargetMarkEnabled
+		9: TimeBetweenPointsTargetSurvival
+		10: ScoreTarget
+		11: TargetMarkTimer
+		12: TruceTimerHunter
+		13: TargetKillScore
+		14: HuntersPerTarget
+
+	player:
+		0: Immortality
+		1: Hitpoints
+		2: HitpointGuiID
+		3: ScoreBuildup
+		4: TargetMarkTimer
+		5: TargetMarkIcon
+		6: TruceTimer
+}
+
+subroutines
+{
+	0: InitialTargetNumer
+}
+
+rule("Setting")
+{
+	event
+	{
+		Ongoing - Global;
+	}
+
+	actions
+	{
+		"Empties hunter array"
+		Global.AvailableHunters = Empty Array;
+		"Add hunters as neccesary"
+		Global.AvailableHunters = Append To Array(Global.AvailableHunters, Hero(Ana));
+		Global.AvailableHunters = Append To Array(Global.AvailableHunters, Hero(Ashe));
+		Global.AvailableHunters = Append To Array(Global.AvailableHunters, Hero(Widowmaker));
+		"Empties target array"
+		Global.AvailableTargets = Empty Array;
+		"Add targets as neccesary"
+		Global.AvailableTargets = Append To Array(Global.AvailableTargets, Hero(Pharah));
+		Global.AvailableTargets = Append To Array(Global.AvailableTargets, Hero(Echo));
+		"Amount of hunters per target"
+		Global.HuntersPerTarget = 3;
+		"Amount of targets. if not 0, overrides 'Amount of hunters per target'"
+		Global.MaxTargetAmount = 0;
+		"immortality in seconds for target at spawn"
+		Global.ImmortalityDuration = 5;
+		"maximum hitpoints for target. set to 1 for insta kill (disables gui)"
+		Global.MaxHitPoints = 5;
+		"Damage that a headshot does. set to 1 to disable headshots"
+		Global.HeadshotDamage = 5;
+		"if true, targets are marked with a skull. "
+		Global.TargetMarkEnabled = True;
+		"time before target is revealed globally"
+		Global.TargetMarkTimer = 15;
+		"time between points for targets"
+		Global.TimeBetweenPointsTargetSurvival = 5;
+		"score target for match"
+		Global.ScoreTarget = 100;
+		"time between damage given from a particulair hunter"
+		Global.TruceTimerHunter = 0.200;
+		"score gained when killing a target"
+		Global.TargetKillScore = 5;
+	}
+}
+
+rule("Game Initialize")
+{
+	event
+	{
+		Ongoing - Global;
+	}
+
+	conditions
+	{
+		Is Game In Progress == True;
+	}
+
+	actions
+	{
+		Disable Inspector Recording;
+		Disable Built-In Game Mode Music;
+		Disable Built-In Game Mode Announcer;
+		Disable Built-In Game Mode Completion;
+		Disable Built-In Game Mode Scoring;
+		Create HUD Text(Filtered Array(All Living Players(All Teams), Array Contains(Global.CurrentTargets, Current Array Element)
+			== True), Custom String("Target", Hero Icon String(Hero(Pharah))), Null, Custom String(
+			"Objective: Survive for as long as possible."), Top, 0, Color(Sky Blue), Color(White), Color(Sky Blue), Visible To and String,
+			Default Visibility);
+		Create HUD Text(All Dead Players(All Teams), Custom String("Dead", Hero Icon String(Hero(Pharah))), Null, Null, Top, 0, Color(Red),
+			Color(Red), Color(Red), Visible To and String, Default Visibility);
+		Create HUD Text(Remove From Array(All Living Players(All Teams), Global.CurrentTargets), Custom String("Hunter"), Null,
+			Custom String("Objective: Hunt down the targets."), Top, 0, Color(Lime Green), Color(Lime Green), Color(Lime Green),
+			Visible To and String, Default Visibility);
+	}
+}
+
+rule("PlayerRespawnEvent")
+{
+	event
+	{
+		Ongoing - Each Player;
+		All;
+		All;
+	}
+
+	conditions
+	{
+		"goes true when player respawned"
+		Is Alive(Event Player) == True;
+	}
+
+	actions
+	{
+		Start Forcing Player To Be Hero(Event Player, Random Value In Array(Global.AvailableHunters));
+		Set Status(Event Player, Null, Unkillable, 9999);
+	}
+}
+
+rule("GameStartEvent")
+{
+	event
+	{
+		Ongoing - Global;
+	}
+
+	conditions
+	{
+		Is Game In Progress == True;
+	}
+
+	actions
+	{
+		Call Subroutine(InitialTargetNumer);
+		Big Message(All Players(All Teams), Custom String("Target spawning in 10 seconds. Get ready!"));
+		Wait(10, Ignore Condition);
+		If(Global.MaxTargetAmount == 1);
+			Big Message(All Players(All Teams), Custom String("New Target Appeared!"));
+		Else;
+			Big Message(All Players(All Teams), Custom String("New Targets Appeared!"));
+		End;
+		"picks player at random"
+		Global.CurrentTargets = Randomized Array(Randomized Array(Randomized Array(All Players(All Teams))));
+		Global.CurrentTargets = Array Slice(Global.CurrentTargets, 0, Global.MaxTargetAmount);
+	}
+}
+
+rule("TargetForceHero")
+{
+	event
+	{
+		Ongoing - Each Player;
+		All;
+		All;
+	}
+
+	conditions
+	{
+		Array Contains(Global.CurrentTargets, Event Player) == True;
+		Is Alive(Event Player) == True;
+	}
+
+	actions
+	{
+		Start Forcing Player To Be Hero(Event Player, Random Value In Array(Global.AvailableTargets));
+		Event Player.Immortality = Global.ImmortalityDuration;
+		Big Message(Event Player, Custom String("Survive!"));
+		Event Player.Hitpoints = Global.MaxHitPoints;
+		Event Player.TargetMarkTimer = 0;
+	}
+}
+
+rule("ImmunityTimer")
+{
+	event
+	{
+		Ongoing - Each Player;
+		All;
+		All;
+	}
+
+	conditions
+	{
+		Event Player.Immortality > 0;
+	}
+
+	actions
+	{
+		Event Player.Immortality -= 0.250;
+		Play Effect(All Players(All Teams), Bad Pickup Effect, Color(Purple), Position Of(Event Player), 2);
+		Wait(0.250, Ignore Condition);
+		Loop If Condition Is True;
+	}
+}
+
+rule("HitpointGuiCreation")
+{
+	event
+	{
+		Ongoing - Each Player;
+		All;
+		All;
+	}
+
+	conditions
+	{
+		Array Contains(Global.CurrentTargets, Event Player) == True;
+		Is Alive(Event Player) == True;
+		"disables hitpoint gui if hitpoints <= 1"
+		Global.MaxHitPoints >= 2;
+		"dont load GUI second time"
+		Event Player.HitpointGuiID == False;
+	}
+
+	actions
+	{
+		Create HUD Text(Filtered Array(All Living Players(All Teams), Current Array Element == Event Player), Custom String("HP: {0}/{1}",
+			Event Player.Hitpoints, Global.MaxHitPoints), Null, Null, Right, 0, Color(Sky Blue), Color(White), Color(White),
+			Visible To and String, Default Visibility);
+		Event Player.HitpointGuiID = Last Text ID;
+	}
+}
+
+rule("HitPointGuiDelete")
+{
+	event
+	{
+		Ongoing - Each Player;
+		All;
+		All;
+	}
+
+	conditions
+	{
+		Array Contains(Global.CurrentTargets, Event Player) == False;
+		"GUI ID set. means there is a gui to remove"
+		Event Player.HitpointGuiID != False;
+	}
+
+	actions
+	{
+		Destroy HUD Text(Event Player.HitpointGuiID);
+		Event Player.HitpointGuiID = False;
+	}
+}
+
+disabled rule("debug")
+{
+	event
+	{
+		Ongoing - Each Player;
+		All;
+		All;
+	}
+
+	conditions
+	{
+		Is Button Held(Event Player, Button(Interact)) == True;
+	}
+
+	actions
+	{
+		Global.CurrentTargets = Empty Array;
+	}
+}
+
+rule("PlayerTakeDamageEvent")
+{
+	event
+	{
+		Player Took Damage;
+		All;
+		All;
+	}
+
+	actions
+	{
+		Heal(Event Player, Null, 2000);
+	}
+}
+
+rule("TargetTakeDamageEvent")
+{
+	event
+	{
+		Player Took Damage;
+		All;
+		All;
+	}
+
+	conditions
+	{
+		Array Contains(Global.CurrentTargets, Event Player) == True;
+	}
+
+	actions
+	{
+		"if truce != 0, abort"
+		Abort If(Attacker.TruceTimer > 0);
+		"if attacker is another target, abort"
+		Abort If(Array Contains(Global.CurrentTargets, Attacker) == True);
+		"if immortal, abort"
+		Abort If(Victim.Immortality > 0);
+		If(Event Was Critical Hit);
+			Event Player.Hitpoints -= Global.HeadshotDamage;
+			Small Message(All Players(All Teams), Custom String("{0} made a headshot!", Attacker));
+		Else;
+			Event Player.Hitpoints -= 1;
+			disabled Small Message(Victim, Custom String("Hit", Attacker));
+			disabled Small Message(Attacker, Custom String("Hit", Attacker));
+		End;
+		Modify Player Variable(Event Player, Hitpoints, Max, 0);
+		"if hitpoints remain, abort"
+		disabled Abort If(Event Player.Hitpoints > 0);
+		disabled Wait(0.100, Ignore Condition);
+		If(Event Player.Hitpoints == 0);
+			Wait(0.050, Ignore Condition);
+			Clear Status(Event Player, Unkillable);
+			Kill(Event Player, Attacker);
+			Wait(0.050, Ignore Condition);
+			Clear Status(Event Player, Unkillable);
+			Kill(Event Player, Attacker);
+			Wait(0.050, Ignore Condition);
+			Clear Status(Event Player, Unkillable);
+			Kill(Event Player, Attacker);
+			Wait(0.050, Ignore Condition);
+			Clear Status(Event Player, Unkillable);
+			Kill(Event Player, Attacker);
+		End;
+		Attacker.TruceTimer = Global.TruceTimerHunter;
+	}
+}
+
+rule("TargetDeathEvent")
+{
+	event
+	{
+		Player Died;
+		All;
+		All;
+	}
+
+	conditions
+	{
+		Array Contains(Global.CurrentTargets, Event Player) == True;
+		Attacker != Victim;
+	}
+
+	actions
+	{
+		"remove target from array"
+		Modify Global Variable(CurrentTargets, Remove From Array By Value, Victim);
+		"add attacker as target"
+		Modify Global Variable(CurrentTargets, Append To Array, Attacker);
+		Big Message(Filtered Array(All Players(All Teams), Current Array Element == Attacker), Custom String("New Target Appeared!"));
+		Victim.ScoreBuildup = 0;
+		Modify Player Score(Attacker, Global.TargetKillScore);
+	}
+}
+
+rule("TargetSuicideEvent")
+{
+	event
+	{
+		Player Died;
+		All;
+		All;
+	}
+
+	conditions
+	{
+		Array Contains(Global.CurrentTargets, Event Player) == True;
+		Attacker == Victim;
+	}
+
+	actions
+	{
+		Modify Player Score(Event Player, Event Player.ScoreBuildup);
+		Event Player.ScoreBuildup = 0;
+		Small Message(Event Player, Custom String("dont suicide! you lost your progress"));
+		Event Player.TargetMarkTimer = 0;
+		Destroy In-World Text(Event Player.TargetMarkIcon);
+		Event Player.TargetMarkIcon = False;
+	}
+}
+
+rule("TargetSurvivalScore")
+{
+	event
+	{
+		Ongoing - Each Player;
+		All;
+		All;
+	}
+
+	conditions
+	{
+		Is Alive(Event Player) == True;
+		Array Contains(Global.CurrentTargets, Event Player) == True;
+		Event Player.Immortality <= 0;
+	}
+
+	actions
+	{
+		Wait(Global.TimeBetweenPointsTargetSurvival, Abort When False);
+		Modify Player Score(Event Player, 1);
+		Event Player.ScoreBuildup -= 1;
+		Loop If Condition Is True;
+	}
+}
+
+rule("WinCondition")
+{
+	event
+	{
+		Ongoing - Each Player;
+		All;
+		All;
+	}
+
+	conditions
+	{
+		Score Of(Event Player) >= Global.ScoreTarget;
+	}
+
+	actions
+	{
+		Declare Player Victory(Event Player);
+	}
+}
+
+rule("TargetMarkCreationHitpoints")
+{
+	event
+	{
+		Ongoing - Each Player;
+		All;
+		All;
+	}
+
+	conditions
+	{
+		Global.TargetMarkEnabled == True;
+		Array Contains(Global.CurrentTargets, Event Player) == True;
+		Event Player.TargetMarkIcon == False;
+		Global.MaxHitPoints > 1;
+		Event Player.Immortality <= 0;
+	}
+
+	actions
+	{
+		If(Event Player.TargetMarkTimer >= Global.TargetMarkTimer);
+			Create In-World Text(All Players(All Teams), Custom String("HP: {0}/{1}", Event Player.Hitpoints, Global.MaxHitPoints),
+				Position Of(Event Player) + Vector(0, 2, 0), 5, Do Not Clip, Visible To Position and String, Color(Red), Visible Always);
+			Event Player.TargetMarkIcon = Last Text ID;
+			Big Message(Event Player, Custom String("You have been marked!"));
+		Else;
+			Event Player.TargetMarkTimer += 0.250;
+		End;
+		Wait(0.250, Ignore Condition);
+		Loop If Condition Is True;
+	}
+}
+
+rule("TargetMarkCreationSkull")
+{
+	event
+	{
+		Ongoing - Each Player;
+		All;
+		All;
+	}
+
+	conditions
+	{
+		Global.TargetMarkEnabled == True;
+		Array Contains(Global.CurrentTargets, Event Player) == True;
+		Event Player.TargetMarkIcon == False;
+		Global.MaxHitPoints == 1;
+		Event Player.Immortality <= 0;
+	}
+
+	actions
+	{
+		If(Event Player.TargetMarkTimer >= Global.TargetMarkTimer);
+			Create In-World Text(All Players(All Teams), Custom String("{0}", Icon String(Skull), Global.MaxHitPoints), Position Of(
+				Event Player) + Vector(0, 2, 0), 5, Do Not Clip, Visible To Position and String, Color(Red), Visible Always);
+			Event Player.TargetMarkIcon = Last Text ID;
+			Big Message(Event Player, Custom String("You have been marked!"));
+		Else;
+			Event Player.TargetMarkTimer += 0.250;
+		End;
+		Wait(0.250, Ignore Condition);
+		Loop If Condition Is True;
+	}
+}
+
+rule("TargetMarkDelete")
+{
+	event
+	{
+		Ongoing - Each Player;
+		All;
+		All;
+	}
+
+	conditions
+	{
+		Array Contains(Global.CurrentTargets, Event Player) == False;
+		"GUI ID set. means there is a gui to remove"
+		Event Player.TargetMarkIcon != False;
+		Global.TargetMarkEnabled == True;
+	}
+
+	actions
+	{
+		Destroy In-World Text(Event Player.TargetMarkIcon);
+		Event Player.TargetMarkIcon = False;
+	}
+}
+
+rule("TruceTimerTick")
+{
+	event
+	{
+		Ongoing - Each Player;
+		All;
+		All;
+	}
+
+	conditions
+	{
+		Is Game In Progress == True;
+		Event Player.TruceTimer > 0;
+	}
+
+	actions
+	{
+		Wait(0.050, Abort When False);
+		Event Player.TruceTimer -= 0.050;
+		Modify Player Variable(Event Player, TruceTimer, Max, 0);
+		Loop If Condition Is True;
+	}
+}
+
+rule("AutomaticPlayerCalculation")
+{
+	event
+	{
+		Subroutine;
+		InitialTargetNumer;
+	}
+
+	actions
+	{
+		Abort If(Global.MaxTargetAmount != 0);
+		Global.MaxTargetAmount = Round To Integer(Count Of(All Players(All Teams)) / Global.HuntersPerTarget, Up);
+	}
+}
